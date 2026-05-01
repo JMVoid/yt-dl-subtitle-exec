@@ -15,7 +15,7 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  build:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -28,7 +28,7 @@ jobs:
             artifact_name: yt-dl-subtitle-macos
             exe_name: yt-dl-subtitle
           - os: windows-latest
-            artifact_name: yt-dl-subtitle-windows.exe
+            artifact_name: yt-dl-subtitle-windows
             exe_name: yt-dl-subtitle.exe
 
     steps:
@@ -56,10 +56,49 @@ jobs:
       - name: Build with PyInstaller
         run: pyinstaller yt-dl-subtitle.spec --clean
 
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: dist/yt-dl-subtitle*
+          retention-days: 5
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: List artifacts
+        run: ls -la dist/
+
+      - name: Rename artifacts for release
+        run: |
+          cd dist
+          # Linux
+          if [ -f "yt-dl-subtitle-linux/yt-dl-subtitle" ]; then
+            cp "yt-dl-subtitle-linux/yt-dl-subtitle" "yt-dl-subtitle-linux"
+          fi
+          # macOS
+          if [ -f "yt-dl-subtitle-macos/yt-dl-subtitle" ]; then
+            cp "yt-dl-subtitle-macos/yt-dl-subtitle" "yt-dl-subtitle-macos"
+          fi
+          # Windows
+          if [ -f "yt-dl-subtitle-windows/yt-dl-subtitle.exe" ]; then
+            cp "yt-dl-subtitle-windows/yt-dl-subtitle.exe" "yt-dl-subtitle-windows.exe"
+          fi
+          ls -la
+
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/${{ matrix.exe_name }}*
+          files: |
+            dist/yt-dl-subtitle-linux
+            dist/yt-dl-subtitle-macos
+            dist/yt-dl-subtitle-windows.exe
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
