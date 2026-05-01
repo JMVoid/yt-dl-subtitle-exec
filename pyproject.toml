@@ -16,3 +16,16 @@ build-backend = "setuptools.build_meta"
 
 [project.scripts]
 yt-dl-subtitle = "cli:main"
+
+[project.urls]
+Homepage = "https://github.com/JMVoid/yt-dl-subtitle-exec"
+Repository = "https://github.com/JMVoid/yt-dl-subtitle-exec"
+Issues = "https://github.com/JMVoid/yt-dl-subtitle-exec/issues"
+Releases = "https://github.com/JMVoid/yt-dl-subtitle-exec/releases"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["youtube*", "utils*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

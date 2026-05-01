@@ -1,5 +1,10 @@
 # YT Subtitle Downloader (yt-dl-subtitle)
 
+[![Build](https://github.com/JMVoid/yt-dl-subtitle-exec/actions/workflows/build.yml/badge.svg)](https://github.com/JMVoid/yt-dl-subtitle-exec/actions/workflows/build.yml)
+[![Release](https://img.shields.io/github/v/release/JMVoid/yt-dl-subtitle-exec?label=Release)](https://github.com/JMVoid/yt-dl-subtitle-exec/releases/latest)
+[![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
+
+
 This project provides a simple CLI tool to download transcripts/subtitles from YouTube videos. It focuses on efficiency and ease of use, with the ability to compile into a standalone executable.
 
 ## Features
