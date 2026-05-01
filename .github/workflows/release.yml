@@ -72,33 +72,13 @@ jobs:
         with:
           path: dist
 
-      - name: List artifacts
-        run: ls -la dist/
-
-      - name: Rename artifacts for release
-        run: |
-          cd dist
-          # Linux
-          if [ -f "yt-dl-subtitle-linux/yt-dl-subtitle" ]; then
-            cp "yt-dl-subtitle-linux/yt-dl-subtitle" "yt-dl-subtitle-linux"
-          fi
-          # macOS
-          if [ -f "yt-dl-subtitle-macos/yt-dl-subtitle" ]; then
-            cp "yt-dl-subtitle-macos/yt-dl-subtitle" "yt-dl-subtitle-macos"
-          fi
-          # Windows
-          if [ -f "yt-dl-subtitle-windows/yt-dl-subtitle.exe" ]; then
-            cp "yt-dl-subtitle-windows/yt-dl-subtitle.exe" "yt-dl-subtitle-windows.exe"
-          fi
-          ls -la
-
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/yt-dl-subtitle-linux
-            dist/yt-dl-subtitle-macos
-            dist/yt-dl-subtitle-windows.exe
+            dist/yt-dl-subtitle-linux/yt-dl-subtitle
+            dist/yt-dl-subtitle-macos/yt-dl-subtitle
+            dist/yt-dl-subtitle-windows/yt-dl-subtitle.exe
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
