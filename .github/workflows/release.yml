@@ -57,9 +57,7 @@ jobs:
         run: pyinstaller yt-dl-subtitle.spec --clean
 
       - name: Rename executable
-        run: |
-          mv dist/yt-dl-subtitle* dist/${{ matrix.out_name }}
-          ls -la dist/
+        run: mv dist/yt-dl-subtitle* dist/${{ matrix.out_name }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

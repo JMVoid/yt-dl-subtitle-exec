@@ -83,5 +83,5 @@ jobs:
 
       - name: Make executable and test
         run: |
-          chmod +x dist/yt-dl-subtitle
+          if [ "$RUNNER_OS" != "Windows" ]; then chmod +x dist/yt-dl-subtitle; fi
           ./dist/yt-dl-subtitle --help
