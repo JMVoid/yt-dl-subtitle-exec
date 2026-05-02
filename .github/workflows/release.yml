@@ -56,6 +56,17 @@ jobs:
       - name: Build with PyInstaller
         run: pyinstaller yt-dl-subtitle.spec --clean
 
+      - name: Rename executable
+        run: |
+          if [ "${{ runner.os }}" == "Linux" ]; then
+            mv dist/yt-dl-subtitle dist/yt-dl-subtitle-linux
+          elif [ "${{ runner.os }}" == "macOS" ]; then
+            mv dist/yt-dl-subtitle dist/yt-dl-subtitle-macos
+          elif [ "${{ runner.os }}" == "Windows" ]; then
+            mv dist/yt-dl-subtitle.exe dist/yt-dl-subtitle-windows.exe
+          fi
+          ls -la dist/
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -76,9 +87,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/yt-dl-subtitle-linux/yt-dl-subtitle
-            dist/yt-dl-subtitle-macos/yt-dl-subtitle
-            dist/yt-dl-subtitle-windows/yt-dl-subtitle.exe
+            dist/yt-dl-subtitle-linux/yt-dl-subtitle-linux
+            dist/yt-dl-subtitle-macos/yt-dl-subtitle-macos
+            dist/yt-dl-subtitle-windows/yt-dl-subtitle-windows.exe
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
