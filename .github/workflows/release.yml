@@ -23,13 +23,13 @@ jobs:
         include:
           - os: ubuntu-latest
             artifact_name: yt-dl-subtitle-linux
-            exe_name: yt-dl-subtitle
+            out_name: yt-dl-subtitle-linux
           - os: macos-latest
             artifact_name: yt-dl-subtitle-macos
-            exe_name: yt-dl-subtitle
+            out_name: yt-dl-subtitle-macos
           - os: windows-latest
             artifact_name: yt-dl-subtitle-windows
-            exe_name: yt-dl-subtitle.exe
+            out_name: yt-dl-subtitle-windows.exe
 
     steps:
       - name: Checkout
@@ -58,13 +58,7 @@ jobs:
 
       - name: Rename executable
         run: |
-          if [ "${{ runner.os }}" == "Linux" ]; then
-            mv dist/yt-dl-subtitle dist/yt-dl-subtitle-linux
-          elif [ "${{ runner.os }}" == "macOS" ]; then
-            mv dist/yt-dl-subtitle dist/yt-dl-subtitle-macos
-          elif [ "${{ runner.os }}" == "Windows" ]; then
-            mv dist/yt-dl-subtitle.exe dist/yt-dl-subtitle-windows.exe
-          fi
+          mv dist/yt-dl-subtitle* dist/${{ matrix.out_name }}
           ls -la dist/
 
       - name: Upload artifact
