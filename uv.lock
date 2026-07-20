@@ -128,7 +128,6 @@ wheels = [
 
 [[package]]
 name = "yt-dl-subtitle"
-version = "0.3.0"
 source = { editable = "." }
 dependencies = [
     { name = "asyncio" },
