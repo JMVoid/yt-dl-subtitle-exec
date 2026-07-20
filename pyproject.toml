@@ -5,7 +5,7 @@ description = "YouTube subtitle downloader CLI tool"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "pytubefix",
+    "yt-dlp",
     "python-dotenv",
     "asyncio",
     "certifi"

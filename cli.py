@@ -22,7 +22,6 @@ urllib.request.install_opener(_opener)
 os.environ['SSL_CERT_FILE'] = _certifi_cafile
 os.environ['REQUESTS_CA_BUNDLE'] = _certifi_cafile
 
-from pytubefix import YouTube
 from youtube.yt_subtitle_dl import dl_caption_byId
 from dotenv import load_dotenv
 
@@ -35,27 +34,19 @@ load_dotenv()
 # Get environment variables
 youtube_proxy: Optional[str] = os.getenv("YT_DL_PROXY")
 
+
 async def download_subtitle_with_id(
-    url: str, 
+    url: str,
     target_lang: str = "en",
     proxy: Optional[str] = None
 ) -> Dict[str, Any]:
     """Core logic for downloading subtitles"""
     try:
         logging.info(f"Processing URL: {url}")
-        # Configure proxies
-        proxy_dict = None
-        if proxy:
-            if proxy.startswith('http://') or proxy.startswith('https://'):
-                proxy_dict = {'http': proxy, 'https': proxy}
-            else:
-                proxy_dict = {'http': f'http://{proxy}', 'https': f'http://{proxy}'}
-        
-        yt = YouTube(url, proxies=proxy_dict)
-        
+
         # Call function to get metadata and subtitle content
-        success, result = dl_caption_byId(yt, target_lang)
-        
+        success, result = dl_caption_byId(url, target_lang, proxy)
+
         if success:
             # On success, merge status with metadata
             response = {"status": "success"}
@@ -66,8 +57,6 @@ async def download_subtitle_with_id(
             return {
                 "status": "failure",
                 "reason": result,
-                "title": yt.title,
-                "description": yt.description,
             }
 
     except Exception as e:
@@ -75,28 +64,30 @@ async def download_subtitle_with_id(
         logging.error(error_msg)
         return {"status": "failure", "reason": error_msg}
 
+
 def main():
     """CLI entry point"""
     parser = argparse.ArgumentParser(
         description='YouTube Subtitle Downloader Tool',
         usage='%(prog)s <url> [-l <lang>]'
     )
-    
+
     # Main arguments
     parser.add_argument('url', help='YouTube video URL')
     parser.add_argument('-l', '--lang', default='en', help='Target language code (default: en)')
-    
+
     args = parser.parse_args()
-    
+
     # Log proxy usage status
     if youtube_proxy:
-        logging.info("youtube download proxy was setted and used")
+        logging.info("youtube download proxy was set and used")
     else:
-        logging.info("youtube download proxy not be setted")
-    
+        logging.info("youtube download proxy not set")
+
     # Download subtitle
     result = asyncio.run(download_subtitle_with_id(args.url, args.lang, youtube_proxy))
     print(json.dumps(result, indent=2, ensure_ascii=False))
+
 
 if __name__ == "__main__":
     main()

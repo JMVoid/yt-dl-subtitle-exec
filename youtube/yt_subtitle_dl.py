@@ -1,14 +1,12 @@
-
-import os
 import re
 import logging
-from pytubefix import YouTube
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple, Union
 from collections import defaultdict
-from utils.utils import timeout_download
-from utils.constant import TIMEOUT_DOWNLOAD_5
 
-VALID_LANG_CODES  = [
+import yt_dlp
+from yt_dlp.utils import DownloadError
+
+VALID_LANG_CODES = [
     "en",   # 英语 – 全球通用语，国际交流、科技、互联网主导语言
     "zh",   # 中文 – 母语人数最多，互联网用户庞大，经济影响力强
     "es",   # 西班牙语 – 母语人数第二多，美洲和欧洲广泛使用
@@ -59,13 +57,14 @@ def _srt_content_to_text(srt_content: str) -> str:
         if not line or line.isdigit() or timestamp_pattern.match(line):
             continue
         text_lines.append(line)
-    
+
     return '\n'.join(text_lines)
 
 
-def _find_best_caption_for_lang(cap_list: list, lang_code: str) -> Optional[any]:
+def _find_best_caption_for_lang(cap_list: list, lang_code: str) -> Optional[dict]:
     """
     根据用户定义的优先级规则从字幕列表中选择最佳字幕。
+    字幕列表中的每个元素是一个 dict: {'code': str, 'url': str, 'ext': str}
     优先级:
     1. 通用语言代码 (e.g., 'en')
     2. 特定区域代码 (e.g., 'en-US')
@@ -80,20 +79,21 @@ def _find_best_caption_for_lang(cap_list: list, lang_code: str) -> Optional[any]
     }
 
     for cap in cap_list:
+        code = cap['code']
         # 1. 通用语言 (e.g., 'en')
-        if cap.code == lang_code:
+        if code == lang_code:
             if not candidates['base']:
                 candidates['base'] = cap
         # 2. 特定区域 (e.g., 'en-US')
-        elif '-' in cap.code and '.' not in cap.code:
+        elif '-' in code and '.' not in code:
             if not candidates['regional']:
                 candidates['regional'] = cap
         # 3. 机器翻译 (e.g., 'en.*')
-        elif '.' in cap.code and not cap.code.startswith('a.'):
+        elif '.' in code and not code.startswith('a.'):
             if not candidates['machine']:
                 candidates['machine'] = cap
         # 4. 自动语音识别 (e.g., 'a.en')
-        elif cap.code.startswith('a.'):
+        elif code.startswith('a.'):
             if not candidates['auto']:
                 candidates['auto'] = cap
 
@@ -112,7 +112,7 @@ def _get_base_lang(caption_code: str) -> Optional[str]:
             return code_after_a
         if code_after_a == 'iw':
             return 'he'
-        
+
     candidate = caption_code.split('-')[0]
     if candidate in VALID_LANG_CODES:
         return candidate
@@ -123,100 +123,349 @@ def _get_base_lang(caption_code: str) -> Optional[str]:
         return candidate
     if candidate == 'iw':
         return 'he'
-        
+
     return None
 
-from typing import Optional, Dict, Any, Tuple, Union
 
-def dl_caption_byId(yt_object: YouTube, target_lang: str = "en") -> Tuple[bool, Union[Dict[str, Any], str]]:
+def _build_caption_list(info_dict: dict) -> list:
+    """
+    从 yt-dlp 的 info_dict 构建统一的字幕列表。
+    yt-dlp 中:
+    - subtitles: 手动字幕 {code: [{url, ext, name, ...}]}
+    - automatic_captions: 自动字幕，结构同上
+
+    为保持与原 pytubefix 逻辑兼容，自动字幕的 code 加上 'a.' 前缀。
+    返回 list of dict: [{'code': str, 'url': str, 'ext': str}, ...]
+    """
+    caption_list = []
+
+    # 手动字幕
+    subtitles = info_dict.get('subtitles') or {}
+    for lang_code, entries in subtitles.items():
+        for entry in entries:
+            caption_list.append({
+                'code': lang_code,
+                'url': entry.get('url', ''),
+                'ext': entry.get('ext', ''),
+            })
+
+    # 自动字幕 — 加 'a.' 前缀以兼容原逻辑
+    auto_captions = info_dict.get('automatic_captions') or {}
+    for lang_code, entries in auto_captions.items():
+        for entry in entries:
+            caption_list.append({
+                'code': f'a.{lang_code}',
+                'url': entry.get('url', ''),
+                'ext': entry.get('ext', ''),
+            })
+
+    return caption_list
+
+
+def _download_subtitle_text(url: str, ydl: yt_dlp.YoutubeDL) -> Optional[str]:
+    """
+    使用 yt-dlp 的内部下载器从字幕 URL 获取文本内容。
+    支持 JSON3 / VTT / TTML / SRT 等多种格式，统一转换为纯文本返回。
+    返回纯文本字符串，或 None（失败时）。
+    """
+    try:
+        # yt-dlp 的字幕 URL 返回的内容格式取决于 ext 字段
+        # 通常可以是 json3, vtt, ttml, srv1, srv2, srv3 等
+        subtitle_data = ydl.urlopen(url).read()
+
+        # 尝试将内容解码为文本
+        try:
+            text = subtitle_data.decode('utf-8')
+        except UnicodeDecodeError:
+            text = subtitle_data.decode('utf-8', errors='replace')
+
+        trimmed = text.strip()
+
+        # 根据格式进行转换
+        if trimmed.startswith('{') and '"wireMagic"' in trimmed[:100]:
+            # YouTube JSON3 格式（首字符 { 后可能有换行） → 直接提取纯文本
+            text = _json3_to_text(text)
+        elif trimmed.startswith('WEBVTT'):
+            # WebVTT → SRT → 纯文本（后续由 _srt_content_to_text 处理）
+            text = _vtt_to_srt(text)
+        elif trimmed.startswith('<?xml') or trimmed.startswith('<tt'):
+            # TTML → SRT → 纯文本
+            text = _ttml_to_srt(text)
+        # 其他格式（SRT / srv1/2/3 等）按原样返回
+
+        return text
+    except Exception as e:
+        logging.error(f"下载或转换字幕失败: {e}")
+        return None
+
+
+def _vtt_to_srt(vtt_content: str) -> str:
+    """
+    将 WebVTT 内容转换为 SRT 格式。
+    """
+    lines = vtt_content.strip().split('\n')
+    srt_lines = []
+    cue_index = 1
+    i = 0
+
+    # 跳过 WEBVTT 头
+    while i < len(lines) and (lines[i].strip().startswith('WEBVTT') or lines[i].strip().startswith('Kind:') or lines[i].strip().startswith('Language:') or lines[i].strip() == ''):
+        i += 1
+
+    while i < len(lines):
+        line = lines[i].strip()
+
+        # 跳过空行
+        if not line:
+            i += 1
+            continue
+
+        # 检查是否是时间戳行
+        if '-->' in line:
+            # VTT 时间戳可能使用 '.' 而不是 ',' 作为毫秒分隔符
+            timestamp = line.replace('.', ',')
+            # 确保格式正确
+            srt_lines.append(str(cue_index))
+            srt_lines.append(timestamp)
+
+            # 收集字幕文本
+            i += 1
+            text_parts = []
+            while i < len(lines) and lines[i].strip() != '':
+                text_parts.append(lines[i].strip())
+                i += 1
+
+            srt_lines.extend(text_parts)
+            srt_lines.append('')  # 空行分隔
+            cue_index += 1
+        else:
+            i += 1
+
+    return '\n'.join(srt_lines)
+
+
+def _json3_to_text(json3_content: str) -> str:
+    """
+    将 YouTube JSON3 字幕格式转换为纯文本。
+    JSON3 结构: {"wireMagic": "pb3", "events": [{"segs": [{"utf8": "text"}]}]}
+    只提取文本内容，丢弃时间戳等元数据。
+    """
+    import json
+
+    try:
+        data = json.loads(json3_content)
+    except json.JSONDecodeError:
+        return json3_content
+
+    text_parts = []
+    events = data.get('events', [])
+    for event in events:
+        segs = event.get('segs', [])
+        for seg in segs:
+            utf8_text = seg.get('utf8', '')
+            if utf8_text:
+                text_parts.append(utf8_text)
+
+    return '\n'.join(text_parts)
+
+
+def _ttml_to_srt(ttml_content: str) -> str:
+    """
+    将 TTML (XML) 字幕内容转换为 SRT 格式的简单实现。
+    支持基本的 <p> 标签格式。
+    """
+    import xml.etree.ElementTree as ET
+
+    try:
+        root = ET.fromstring(ttml_content)
+    except ET.ParseError:
+        # 如果 XML 解析失败，尝试提取纯文本
+        return ttml_content
+
+    # 定义命名空间
+    ns = {
+        'tt': 'http://www.w3.org/ns/ttml',
+        '': 'http://www.w3.org/ns/ttml',
+    }
+
+    srt_lines = []
+    cue_index = 1
+
+    # 查找所有 <p> 元素
+    for p in root.iter():
+        if p.tag.endswith('}p') or p.tag == 'p':
+            begin = p.attrib.get('begin', p.attrib.get('{http://www.w3.org/ns/ttml}begin', ''))
+            end = p.attrib.get('end', p.attrib.get('{http://www.w3.org/ns/ttml}end', ''))
+            text = ''.join(p.itertext()).strip()
+
+            if text:
+                # 转换时间戳
+                begin_srt = _ttml_time_to_srt(begin)
+                end_srt = _ttml_time_to_srt(end)
+
+                srt_lines.append(str(cue_index))
+                srt_lines.append(f"{begin_srt} --> {end_srt}")
+                srt_lines.append(text)
+                srt_lines.append('')
+                cue_index += 1
+
+    return '\n'.join(srt_lines)
+
+
+def _ttml_time_to_srt(ttml_time: str) -> str:
+    """
+    将 TTML 时间格式 (HH:MM:SS.mmm 或 123.456s) 转换为 SRT 格式 (HH:MM:SS,mmm)。
+    """
+    if not ttml_time:
+        return '00:00:00,000'
+
+    # 去掉可能的 's' 后缀
+    ttml_time = ttml_time.rstrip('s')
+
+    # 如果是秒数格式 (e.g., "123.456")
+    if ':' not in ttml_time:
+        try:
+            seconds = float(ttml_time)
+            hours = int(seconds // 3600)
+            minutes = int((seconds % 3600) // 60)
+            secs = seconds % 60
+            return f"{hours:02d}:{minutes:02d}:{secs:06.3f}".replace('.', ',')
+        except ValueError:
+            return '00:00:00,000'
+
+    # HH:MM:SS.mmm 格式
+    return ttml_time.replace('.', ',')
+
+
+def dl_caption_byId(
+    url: str,
+    target_lang: str = "en",
+    proxy: Optional[str] = None,
+) -> Tuple[bool, Union[Dict[str, Any], str]]:
     """
     获取视频的最佳字幕内容并与元数据合并。
     - 优先获取 target_lang（默认为 "en"）的字幕。
     - 如果指定语言不可用，则按 VALID_LANG_CODES 顺序回退。
     - 如果都不可用，则选择任意一个可用字幕。
+
+    参数:
+        url: YouTube 视频 URL
+        target_lang: 目标语言代码
+        proxy: HTTP/HTTPS 代理 URL
+
+    返回:
+        (success, result): success 为 True 时 result 为包含 title/description/content 的 dict，
+                           success 为 False 时 result 为错误信息字符串。
     """
-    captions = yt_object.captions
-    available_codes = [cap.code for cap in captions] if captions else []
-    
-    if not captions:
-        error_msg = f"视频 {yt_object.video_id} 没有可用的字幕"
-        logging.error(error_msg)
-        return False, error_msg
+    ydl_opts = {
+        'quiet': True,
+        'no_warnings': True,
+        'extract_flat': False,
+        'skip_download': True,
+        'writesubtitles': False,
+        'writeautomaticsub': False,
+    }
 
-    logging.info(f"视频 {yt_object.video_id} 的原始可用字幕代码: {available_codes}")
+    if proxy:
+        ydl_opts['proxy'] = proxy
 
-    # 按基础语言对字幕进行分组
-    lang_groups = defaultdict(list)
-    for cap in captions:
-        base_lang = _get_base_lang(cap.code)
-        if base_lang:
-            lang_groups[base_lang].append(cap)
-
-    # 为每个语言组找到最佳字幕
-    best_captions = {}
-    for lang, cap_list in lang_groups.items():
-        best_cap = _find_best_caption_for_lang(cap_list, lang)
-        if best_cap:
-            best_captions[lang] = best_cap
-    
-    logging.info(f"视频 {yt_object.video_id} 的可用字幕语言: {list(best_captions.keys())}")
-
-    lang_to_download = None
-
-    # 1. 尝试获取目标语言
-    if target_lang in best_captions:
-        lang_to_download = target_lang
-    else:
-        logging.info(f"未找到指定的语言 '{target_lang}'。将按预设顺序尝试下载。")
-        # 2. 按 VALID_LANG_CODES 顺序查找
-        for lang_code in VALID_LANG_CODES:
-            if lang_code in best_captions:
-                lang_to_download = lang_code
-                # print(f"找到优先语言 '{lang_code}'。准备下载。")
-                break
-    
-    # 3. 如果还没找到，则随机选一个
-    if not lang_to_download and best_captions:
-        lang_to_download = list(best_captions.keys())[0]
-        logging.info(f"未找到优先语言。随机选择一个可用语言 '{lang_to_download}'。")
-
-    if not lang_to_download:
-        error_msg = f"没有找到可供下载的目标语言 (视频ID: {yt_object.video_id})。"
-        logging.error(error_msg)
-        return False, error_msg
-
-    caption_to_process = best_captions.get(lang_to_download)
-
-    if not caption_to_process:
-        error_msg = f"获取字幕 '{lang_to_download}' 失败 (视频ID: {yt_object.video_id})。"
-        logging.error(error_msg)
-        return False, error_msg
+    video_id = None
+    title = ""
+    description = ""
 
     try:
-        # 1. 在内存中获取SRT内容
-        timeout_download(TIMEOUT_DOWNLOAD_5)
-        srt_content = caption_to_process.generate_srt_captions()
-        logging.info(f"成功获取字幕 '{caption_to_process.code}' 的内容 (视频ID: {yt_object.video_id})")
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info_dict = ydl.extract_info(url, download=False)
+            video_id = info_dict.get('id', 'unknown')
+            title = info_dict.get('title', '')
+            description = info_dict.get('description', '')
 
-        # 2. 将SRT内容转换为纯文本
-        text_content = _srt_content_to_text(srt_content)
-        logging.info(f"字幕内容已成功转换为文本。")
+            # 构建统一字幕列表
+            caption_list = _build_caption_list(info_dict)
+            available_codes = [cap['code'] for cap in caption_list]
 
-        # 3. 构建 metadata_payload
-        metadata_payload = {
+            if not caption_list:
+                error_msg = f"视频 {video_id} 没有可用的字幕"
+                logging.error(error_msg)
+                return False, error_msg
 
-            "title": yt_object.title,
-            "description": yt_object.description,
-            "content": text_content,
-            # "video_id": yt_object.video_id,
-            # "author": yt_object.author,
-            # "length": yt_object.length,
-            # "available_captions": available_codes,
-        }
-        
-        return True, metadata_payload
+            logging.info(f"视频 {video_id} 的原始可用字幕代码: {available_codes}")
 
+            # 按基础语言对字幕进行分组
+            lang_groups = defaultdict(list)
+            for cap in caption_list:
+                base_lang = _get_base_lang(cap['code'])
+                if base_lang:
+                    lang_groups[base_lang].append(cap)
+
+            # 为每个语言组找到最佳字幕
+            best_captions = {}
+            for lang, cap_list in lang_groups.items():
+                best_cap = _find_best_caption_for_lang(cap_list, lang)
+                if best_cap:
+                    best_captions[lang] = best_cap
+
+            logging.info(f"视频 {video_id} 的可用字幕语言: {list(best_captions.keys())}")
+
+            lang_to_download = None
+
+            # 1. 尝试获取目标语言
+            if target_lang in best_captions:
+                lang_to_download = target_lang
+            else:
+                logging.info(f"未找到指定的语言 '{target_lang}'。将按预设顺序尝试下载。")
+                # 2. 按 VALID_LANG_CODES 顺序查找
+                for lang_code in VALID_LANG_CODES:
+                    if lang_code in best_captions:
+                        lang_to_download = lang_code
+                        break
+
+            # 3. 如果还没找到，则随机选一个
+            if not lang_to_download and best_captions:
+                lang_to_download = list(best_captions.keys())[0]
+                logging.info(f"未找到优先语言。随机选择一个可用语言 '{lang_to_download}'。")
+
+            if not lang_to_download:
+                error_msg = f"没有找到可供下载的目标语言 (视频ID: {video_id})。"
+                logging.error(error_msg)
+                return False, error_msg
+
+            caption_to_process = best_captions.get(lang_to_download)
+
+            if not caption_to_process:
+                error_msg = f"获取字幕 '{lang_to_download}' 失败 (视频ID: {video_id})。"
+                logging.error(error_msg)
+                return False, error_msg
+
+            # 下载并处理字幕
+            subtitle_url = caption_to_process['url']
+            srt_content = _download_subtitle_text(subtitle_url, ydl)
+
+            if not srt_content:
+                error_msg = f"下载字幕 '{caption_to_process['code']}' 内容失败 (视频ID: {video_id})"
+                logging.error(error_msg)
+                return False, error_msg
+
+            logging.info(f"成功获取字幕 '{caption_to_process['code']}' 的内容 (视频ID: {video_id})")
+
+            # 将 SRT 内容转换为纯文本
+            text_content = _srt_content_to_text(srt_content)
+            logging.info(f"字幕内容已成功转换为文本。")
+
+            # 构建 metadata_payload
+            metadata_payload = {
+                "title": title,
+                "description": description,
+                "content": text_content,
+            }
+
+            return True, metadata_payload
+
+    except DownloadError as e:
+        error_msg = f"yt-dlp 下载错误 (URL: {url}): {e}"
+        logging.error(error_msg)
+        return False, error_msg
     except Exception as e:
-        error_msg = f"处理字幕 '{caption_to_process.code}' 失败 (视频ID: {yt_object.video_id}): {e}"
+        error_msg = f"处理字幕失败 (URL: {url}): {e}"
         logging.error(error_msg)
         return False, error_msg
