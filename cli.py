@@ -5,6 +5,8 @@ import json
 import logging
 from typing import Optional, Dict, Any
 
+__version__ = "0.3.0"
+
 import certifi
 import ssl
 import urllib.request
@@ -75,6 +77,8 @@ def main():
     # Main arguments
     parser.add_argument('url', help='YouTube video URL')
     parser.add_argument('-l', '--lang', default='en', help='Target language code (default: en)')
+    parser.add_argument('-v', '--version', action='version',
+                        version=f'%(prog)s {__version__}')
 
     args = parser.parse_args()
 
