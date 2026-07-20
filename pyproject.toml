@@ -7,7 +7,8 @@ requires-python = ">=3.11"
 dependencies = [
     "pytubefix",
     "python-dotenv",
-    "asyncio"
+    "asyncio",
+    "certifi"
 ]
 
 [build-system]
@@ -29,3 +30,8 @@ include = ["youtube*", "utils*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "pyinstaller>=6.21.0",
+]

@@ -1,6 +1,11 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
 
+# Get certifi cert data directory for bundling
+import certifi
+_certifi_dir = os.path.dirname(certifi.where())
+_certifi_datas = [(_certifi_dir, 'certifi')]
+
 a = Analysis(
     ['cli.py'],
     pathex=[os.path.abspath('.')],
@@ -8,7 +13,7 @@ a = Analysis(
     datas=[
         ('youtube', 'youtube'),
         ('utils', 'utils'),
-    ],
+    ] + _certifi_datas,
     hiddenimports=[
         'youtube',
         'youtube.yt_subtitle_dl',
@@ -19,6 +24,7 @@ a = Analysis(
         'pytubefix',
         'dotenv',
         'asyncio',
+        'certifi',
     ],
     hookspath=[],
     hooksconfig={},

@@ -5,6 +5,23 @@ import json
 import logging
 from typing import Optional, Dict, Any
 
+import certifi
+import ssl
+import urllib.request
+
+# Use certifi's CA bundle instead of system CA certificates.
+# This ensures the bundled executable works on systems without
+# up-to-date CA certificates (e.g. minimal Docker images).
+_certifi_cafile = certifi.where()
+_ssl_context = ssl.create_default_context(cafile=_certifi_cafile)
+_https_handler = urllib.request.HTTPSHandler(context=_ssl_context)
+_opener = urllib.request.build_opener(_https_handler)
+urllib.request.install_opener(_opener)
+
+# Set environment variables as a fallback for any library that reads them
+os.environ['SSL_CERT_FILE'] = _certifi_cafile
+os.environ['REQUESTS_CA_BUNDLE'] = _certifi_cafile
+
 from pytubefix import YouTube
 from youtube.yt_subtitle_dl import dl_caption_byId
 from dotenv import load_dotenv
