@@ -373,7 +373,7 @@ def dl_caption_byId(
 
     if cookies:
         ydl_opts['cookiefile'] = cookies
-        ydl_opts['js_runtimes'] = 'node'
+        ydl_opts['js_runtimes'] = {'node': {}}
         ydl_opts['remote_components'] = ['ejs:github']
 
     video_id = None

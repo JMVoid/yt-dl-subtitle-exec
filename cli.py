@@ -33,9 +33,6 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 # Load environment variables
 load_dotenv()
 
-# Get environment variables
-youtube_proxy: Optional[str] = os.getenv("YT_DL_PROXY")
-
 
 async def download_subtitle_with_id(
     url: str,
@@ -70,6 +67,8 @@ async def download_subtitle_with_id(
 
 def main():
     """CLI entry point"""
+    youtube_proxy = os.getenv("YT_DL_PROXY")
+    
     parser = argparse.ArgumentParser(
         description='YouTube Subtitle Downloader Tool',
         usage='%(prog)s <url> [-l <lang>] [-c <cookies>]'
@@ -93,6 +92,8 @@ def main():
 
     if args.cookies:
         logging.info(f"Using cookies file: {args.cookies}")
+        youtube_proxy = None  # cookies and proxy are mutually exclusive
+        logging.info("Proxy disabled (cookies are used instead)")
 
     # Download subtitle
     result = asyncio.run(download_subtitle_with_id(args.url, args.lang, youtube_proxy, args.cookies))
