@@ -27,6 +27,8 @@ The URL is a **positional argument** (not `--url`). Language is `-l` or `--lang`
 
 ## Output Format
 
+Output is written to stdout by default, or to a file when `-o` is specified.
+
 Success:
 ```json
 {

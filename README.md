@@ -70,6 +70,7 @@ yt-dl-subtitle <URL> [-l <LANG>] [-v]
 | `URL` | ✅ | — | YouTube video URL (positional) |
 | `-l`, `--lang` | ❌ | `en` | Target language code (e.g., `zh`, `ja`, `ko`) |
 | `-c`, `--cookies` | ❌ | — | Path to Netscape-format cookies file (e.g. from Chrome CDP extraction) |
+| `-o`, `--output` | ❌ | — | Output file path; if not specified, output is written to stdout |
 | `-v`, `--version` | ❌ | — | Show version number |
 
 **Examples:**
@@ -85,6 +86,9 @@ yt-dl-subtitle <URL> [-l <LANG>] [-v]
 
 # Use Chrome CDP cookies for authenticated subtitle access
 ./yt-dl-subtitle "https://www.youtube.com/watch?v=xxxxx" -l zh -c /tmp/youtube_cookies.txt
+
+# Save output to a file
+./yt-dl-subtitle "https://www.youtube.com/watch?v=xxxxx" -l en -o result.json
 ```
 
 ### Smart Language Fallback
@@ -97,7 +101,7 @@ If none of the prioritized languages are available, any available subtitle will 
 
 ### Output Format
 
-Returns JSON to stdout:
+Returns JSON to stdout by default, or to a file when `-o` is specified:
 
 ```json
 {

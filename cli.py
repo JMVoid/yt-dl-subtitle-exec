@@ -79,6 +79,8 @@ def main():
     parser.add_argument('-l', '--lang', default='en', help='Target language code (default: en)')
     parser.add_argument('-c', '--cookies', default=None,
                         help='Path to Netscape-format cookies file (e.g. from Chrome CDP)')
+    parser.add_argument('-o', '--output', default=None,
+                        help='Output file path. If not specified, output is written to stdout.')
     parser.add_argument('-v', '--version', action='version',
                         version=f'%(prog)s {__version__}')
 
@@ -97,7 +99,14 @@ def main():
 
     # Download subtitle
     result = asyncio.run(download_subtitle_with_id(args.url, args.lang, youtube_proxy, args.cookies))
-    print(json.dumps(result, indent=2, ensure_ascii=False))
+    output_text = json.dumps(result, indent=2, ensure_ascii=False)
+
+    if args.output:
+        with open(args.output, 'w', encoding='utf-8') as f:
+            f.write(output_text)
+        logging.info(f"Output written to: {args.output}")
+    else:
+        print(output_text)
 
 
 if __name__ == "__main__":
