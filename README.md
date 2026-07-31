@@ -44,43 +44,78 @@ After compilation, the executable will be located at:
 
 ### Command-line Usage
 
-Run the compiled executable or the python script directly.
-
-#### Download Subtitles
-
 ```bash
-./yt-dl-subtitle subtitle --url <URL> [--lang <LANG_CODE>]
+yt-dl-subtitle <URL> [-l <LANG>] [-v]
 ```
 
 **Arguments:**
-- `--url` (required): The full URL of the YouTube video.
-- `--lang` (optional): Two-letter language code (e.g., `en`, `zh`, `es`). Defaults to `en`.
 
-**Example:**
+| Argument | Required | Default | Description |
+|----------|:--------:|---------|-------------|
+| `URL` | ✅ | — | YouTube video URL (positional) |
+| `-l`, `--lang` | ❌ | `en` | Target language code (e.g., `zh`, `ja`, `ko`) |
+| `-c`, `--cookies` | ❌ | — | Path to Netscape-format cookies file (e.g. from Chrome CDP extraction) |
+| `-v`, `--version` | ❌ | — | Show version number |
+
+**Examples:**
 ```bash
-./yt-dl-subtitle subtitle --url "https://www.youtube.com/watch?v=xxxxx" --lang zh
+# Download English subtitles (default)
+./yt-dl-subtitle "https://www.youtube.com/watch?v=xxxxx"
+
+# Download Chinese subtitles
+./yt-dl-subtitle "https://www.youtube.com/watch?v=xxxxx" -l zh
+
+# Download Japanese subtitles with fallback
+./yt-dl-subtitle "https://www.youtube.com/watch?v=xxxxx" -l ja
+
+# Use Chrome CDP cookies for authenticated subtitle access
+./yt-dl-subtitle "https://www.youtube.com/watch?v=xxxxx" -l zh -c /tmp/youtube_cookies.txt
 ```
 
-### Supported Language Codes
+### Smart Language Fallback
 
-Most common language codes are supported, including:
-`en`, `zh`, `es`, `hi`, `ar`, `pt`, `ru`, `ja`, `fr`, `de`, `ko`, `it`, `tr`, `nl`, `pl`, `vi`, `th`, `id`, `ms`, `fa`, `ur`, `bn`, `he`, `fil`, `sv`, `el`, `cs`, `hu`, `da`, `no`, `fi`, `ro`, `uk`, `sr`.
+If the requested language is unavailable, the tool automatically falls back through a **35-language priority list** in this order:
+
+`en` → `zh` → `es` → `hi` → `ar` → `pt` → `ru` → `ja` → `fr` → `de` → `ko` → `it` → `tr` → `nl` → `pl` → `vi` → `th` → `id` → `ms` → `fa` → `ur` → `bn` → `he` → `fil` → `sv` → `el` → `cs` → `hu` → `da` → `no` → `fi` → `ro` → `uk` → `sr`
+
+If none of the prioritized languages are available, any available subtitle will be used as a last resort.
+
+### Output Format
+
+Returns JSON to stdout:
+
+```json
+{
+  "status": "success",
+  "title": "Video Title",
+  "description": "Video Description",
+  "content": "Subtitle text..."
+}
+```
+
+On failure:
+```json
+{
+  "status": "failure",
+  "reason": "Error message..."
+}
+```
 
 ## Configuration
 
 ### Proxy Settings
 
-If you encounter YouTube's bot detection, you can configure a proxy via environment variables or a `.env` file:
+If you encounter YouTube's bot detection, configure a proxy via the `YT_DL_PROXY` environment variable (reads from `.env` file or shell environment):
 
 ```env
-PROXIES=http://your-proxy-server:port
-# Or with authentication
-# PROXIES=http://username:password@ip:port
+YT_DL_PROXY=http://your-proxy-server:port
+# Or with authentication:
+# YT_DL_PROXY=http://username:password@ip:port
 ```
 
 ## Development
 
-The project uses `pytubefix` for interacting with YouTube.
+The project uses `yt-dlp` for interacting with YouTube. The compiled binary bundles `certifi` for TLS certificate verification on systems without up-to-date CA certificates.
 
 ### Project Structure
 
