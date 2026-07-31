@@ -16,29 +16,44 @@ This project provides a simple CLI tool to download transcripts/subtitles from Y
 
 ## Installation
 
-### From Source
+### Prerequisites
 
-Ensure you have Python 3.11+ installed.
+- Python 3.11+
+- [uv](https://docs.astral.sh/uv/) (Python package manager)
 
 ```bash
-pip install .
+# Install uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+### Install Dependencies
+
+```bash
+cd yt-dl-subtitle-exec
+uv sync
+```
+
+This creates a `.venv` virtual environment managed by uv with all dependencies (`yt-dlp`, `python-dotenv`, `certifi`).
+
+### Run from Source (without compiling)
+
+```bash
+uv run python cli.py "URL" -l zh
 ```
 
 ### Build Standalone Executable
 
-To build the `yt-dl-subtitle` executable for your current platform:
+To build the `yt-dl-subtitle` binary for your current platform:
 
 ```bash
-# Install build dependencies
-pip install pyinstaller
-
-# Build the executable
-pyinstaller yt-dl-subtitle.spec --clean
+uv run pyinstaller yt-dl-subtitle.spec --clean
 ```
 
 After compilation, the executable will be located at:
 - `dist/yt-dl-subtitle` (Linux/macOS)
 - `dist/yt-dl-subtitle.exe` (Windows)
+
+⚠️ **After modifying source code, you must recompile for the binary to reflect changes.**
 
 ## Usage
 

@@ -341,6 +341,7 @@ def dl_caption_byId(
     url: str,
     target_lang: str = "en",
     proxy: Optional[str] = None,
+    cookies: Optional[str] = None,
 ) -> Tuple[bool, Union[Dict[str, Any], str]]:
     """
     获取视频的最佳字幕内容并与元数据合并。
@@ -352,6 +353,7 @@ def dl_caption_byId(
         url: YouTube 视频 URL
         target_lang: 目标语言代码
         proxy: HTTP/HTTPS 代理 URL
+        cookies: Netscape 格式的 cookies 文件路径
 
     返回:
         (success, result): success 为 True 时 result 为包含 title/description/content 的 dict，
@@ -368,6 +370,11 @@ def dl_caption_byId(
 
     if proxy:
         ydl_opts['proxy'] = proxy
+
+    if cookies:
+        ydl_opts['cookiefile'] = cookies
+        ydl_opts['js_runtimes'] = 'node'
+        ydl_opts['remote_components'] = ['ejs:github']
 
     video_id = None
     title = ""

@@ -40,14 +40,15 @@ youtube_proxy: Optional[str] = os.getenv("YT_DL_PROXY")
 async def download_subtitle_with_id(
     url: str,
     target_lang: str = "en",
-    proxy: Optional[str] = None
+    proxy: Optional[str] = None,
+    cookies: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Core logic for downloading subtitles"""
     try:
         logging.info(f"Processing URL: {url}")
 
         # Call function to get metadata and subtitle content
-        success, result = dl_caption_byId(url, target_lang, proxy)
+        success, result = dl_caption_byId(url, target_lang, proxy, cookies)
 
         if success:
             # On success, merge status with metadata
@@ -71,12 +72,14 @@ def main():
     """CLI entry point"""
     parser = argparse.ArgumentParser(
         description='YouTube Subtitle Downloader Tool',
-        usage='%(prog)s <url> [-l <lang>]'
+        usage='%(prog)s <url> [-l <lang>] [-c <cookies>]'
     )
 
     # Main arguments
     parser.add_argument('url', help='YouTube video URL')
     parser.add_argument('-l', '--lang', default='en', help='Target language code (default: en)')
+    parser.add_argument('-c', '--cookies', default=None,
+                        help='Path to Netscape-format cookies file (e.g. from Chrome CDP)')
     parser.add_argument('-v', '--version', action='version',
                         version=f'%(prog)s {__version__}')
 
@@ -88,8 +91,11 @@ def main():
     else:
         logging.info("youtube download proxy not set")
 
+    if args.cookies:
+        logging.info(f"Using cookies file: {args.cookies}")
+
     # Download subtitle
-    result = asyncio.run(download_subtitle_with_id(args.url, args.lang, youtube_proxy))
+    result = asyncio.run(download_subtitle_with_id(args.url, args.lang, youtube_proxy, args.cookies))
     print(json.dumps(result, indent=2, ensure_ascii=False))
 
 
